@@ -1,0 +1,72 @@
+<!--
+Copyright 2016 Google, Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+     http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+-->
+<dom-module id="x-emoji-update">
+  <template>
+    <style>
+      :host {
+        display: block;
+        position: relative;
+        width: 160px;
+        height: 160px;
+        margin: 8px 16px;
+        text-align: center;
+      }
+
+      #when {
+        color: rgba(0,0,0,0.64);
+        background: var(--paper-amber-200);
+        padding: 4px 6px;
+        border-radius: 6px;
+        font-size: 12px;
+        position: absolute;
+        bottom: 0;
+        right: 0;
+      }
+      #pic {
+        border-radius: 16px;
+        vertical-align: middle;
+        position: absolute;
+        top: 0;
+        left: 0;
+        @apply(--shadow-elevation-2dp);
+      }
+      #emoji {
+        position: absolute;
+        top: 16px;
+        right: 16px;
+      }
+    </style>
+
+    <img id="emoji" src="[[update.emoji]]" width="128" height="128">
+    <div id="meta">
+      <img id="pic" src="[[update.pic]]" width="32" height="32">
+      <time id="when" is="time-ago" datetime$="[[asDateString(update.updated)]]" format="micro"></time>
+    </div>
+  </template>
+  <script>
+    Polymer({
+      is: 'x-emoji-update',
+      properties: {
+        update: {
+          type: Object
+        }
+      },
+      asDateString: function(time) {
+        return new Date(time).toString();
+      }
+    });
+  </script>
+</dom-module>

@@ -1,0 +1,306 @@
+<!--
+Copyright 2016 Google, Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+     http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+-->
+<link rel="import" href="../bower_components/app-layout/app-layout.html">
+<link rel="import" href="../bower_components/paper-menu/paper-menu.html">
+<link rel="import" href="../bower_components/paper-item/paper-item.html">
+<link rel="import" href="../bower_components/paper-toast/paper-toast.html">
+<link rel="import" href="../bower_components/polymerfire/polymerfire.html">
+<link rel="import" href="../bower_components/app-storage/app-indexeddb-mirror/app-indexeddb-mirror.html">
+<link rel="import" href="x-shade.html">
+<link rel="import" href="x-login.html">
+<link rel="import" href="x-create-team.html">
+<link rel="import" href="x-team-page.html">
+<link rel="import" href="x-emoji-picker.html">
+
+<dom-module id="x-app">
+  <template>
+    <style>
+      :host {
+        @apply(--layout-fit);
+        overflow: hidden;
+      }
+
+      app-drawer-layout {
+        height: 100%;
+      }
+
+      app-drawer #content {
+        color: white;
+        background: var(--paper-blue-500);
+        height: 100%;
+      }
+
+      app-drawer app-toolbar {
+        background: var(--paper-blue-600);
+      }
+
+      paper-menu {
+        color: white;
+        background: transparent;
+        margin: 0;
+      }
+
+      paper-item {
+        font-family: 'Varela Round', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+      }
+
+      paper-item.iron-selected {
+        background: var(--paper-blue-600);
+      }
+
+      app-drawer paper-button {
+        background: var(--paper-blue-700);
+        display: block;
+        padding: 8px;
+        margin: 8px 16px;
+      }
+
+      #toast {
+        font-size: 16px;
+        font-family: 'Varela Round', sans-serif;
+        --paper-toast-background-color: var(--paper-blue-500);
+      }
+    </style>
+
+    <firebase-app
+      api-key="AIzaSyB_if7-xXOeyElO2s8uchMR1aL3rbUHtAA"
+      database-url="https://beerbet-7d100.firebaseio.com"
+      auth-domain="beerbet-7d100.firebaseapp.com"
+      storage-bucket="beerbet-7d100.appspot.com">
+    </firebase-app>
+
+    <firebase-document id="prefs"
+      data="{{_fbPrefs}}"
+      path="/prefs/[[user.uid]]">
+    </firebase-document>
+    <app-indexeddb-mirror id="prefsMirror"
+      session="[[user.uid]]"
+      key="/prefs/[[user.uid]]"
+      data="[[_fbPrefs]]"
+      persisted-data="{{prefs}}"
+      online="[[online]]">
+    </app-indexeddb-mirror>
+
+    <firebase-query id="updates" log
+      data="{{_fbTeamUpdates}}"
+      path="/domains/[[_domainId]]/updates/[[activeTeam.id]]"
+      order-by-child="updated"
+      start-at="[[yesterday]]">
+    </firebase-query>
+    <app-indexeddb-mirror id="updatesMirror"
+      session="[[user.uid]]"
+      key="/domains/[[_domainId]]/updates/[[activeTeam.id]]"
+      data="[[_fbTeamUpdates]]"
+      persisted-data="{{activeTeamUpdates}}"
+      online="[[online]]">
+    </app-indexeddb-mirror>
+
+    <firebase-query id="teams"
+      data="{{_fbTeams}}"
+      path="/domains/[[_domainId]]/teams">
+    </firebase-query>
+    <app-indexeddb-mirror id="teamsMirror"
+      session="[[user.uid]]"
+      key="/domains/[[_domainId]]/teams"
+      data="[[_fbTeams]]"
+      persisted-data="{{teams}}"
+      online="[[online]]">
+    </app-indexeddb-mirror>
+
+    <app-drawer-layout>
+      <app-drawer id="drawer" swipe-open>
+        <div id="content">
+          <app-toolbar>
+            <div title>Your Teams</div>
+          </app-toolbar>
+
+          <section>
+            <paper-menu attr-for-selected="team-id" selected="{{activeTeamId}}">
+              <template is="dom-repeat" items="[[teams]]">
+                <paper-item on-tap="teamSelected" team-id$="[[item.id]]" team="[[item]]">[[item.name]]</paper-item>
+              </template>
+            </paper-menu>
+
+            <paper-button raised on-tap="openShade" shade="teamShade" hidden$="[[offline]]">Create Team</paper-button>
+            <paper-button raised on-tap="logout">Sign Out</paper-button>
+          </section>
+        </div>
+      </app-drawer>
+      <x-team-page team="[[activeTeam]]" updates="[[activeTeamUpdates]]" offline="[[offline]]"></x-team-page>
+    </app-drawer-layout>
+
+    <x-shade id="teamShade" active="[[openTeamShade]]">
+      <x-create-team id="firstTeam" domain="[[domain]]"></x-create-team>
+    </x-shade>
+    <x-shade id="emojiShade" active="{{openEmojiShade}}">
+      <x-emoji-picker id="emoji" domain="[[domain]]" team="[[activeTeamId]]"></x-emoji-picker>
+    </x-shade>
+    <x-shade id="loginShade" active="[[!user]]">
+      <x-login id="login" user="{{user}}" offline="[[offline]]"></x-login>
+    </x-shade>
+
+    <paper-toast class="fit-bottom" id="toast"></paper-toast>
+  </template>
+  <script>
+    var ONE_DAY = 1000 * 60 * 60 * 24;
+
+    Polymer({
+      is: 'x-app',
+      properties: {
+        offline: {
+          type: Boolean,
+          value: false,
+          reflectToAttribute: true
+        },
+        user: {
+          type: Object,
+          observer: '_userChanged'
+        },
+        prefs: {
+          type: Object
+        },
+        teams: {
+          type: Array,
+          observer: '_teamsChanged'
+        },
+        activeTeam: {
+          type: Object
+        },
+        activeTeamUpdates: {
+          type: Array,
+          notify: true
+        },
+        domain: {
+          type: String,
+          readOnly: true,
+          observer: '_domainChanged'
+        },
+        openEmojiShade: {
+          type: Boolean,
+          value: false
+        },
+        openTeamShade: {
+          type: Boolean,
+          value: false
+        }
+      },
+      observers: [
+        'setTeam(prefs.activeTeam, teams.length)'
+      ],
+      ready: function() {
+        this.yesterday = Date.now() - ONE_DAY;
+        this.offline = navigator.onLine === false;
+        window.addEventListener('online', function() {
+          this.offline = false;
+        }.bind(this));
+        window.addEventListener('offline', function() {
+          this.offline = true;
+        }.bind(this));
+      },
+      _userChanged: function() {
+        if (this.user && this.user.emailVerified) {
+          this._setDomain(this.user.email.split('@')[1]);
+        }
+      },
+      _domainChanged: function() {
+        if (this.domain) {
+          this._domainId = this.domain.replace(/\./g,',');
+          this.domainRef = firebase.database().ref('/domains').child(this._domainId);
+        }
+      },
+      _teamsChanged: function() {
+        if (this.teams && this._pendingTeamId) {
+          this.setTeam(this._pendingTeamId);
+          this._pendingTeamId = null;
+        }
+      },
+      _pushId: function() {
+        return firebase.database().ref().push().key;
+      },
+      openShade: function(e) {
+        var shade;
+        if (typeof e === 'string') {
+          shade = e;
+        } else {
+          shade = e.currentTarget.getAttribute('shade');
+        }
+        this.$[shade].active = true;
+      },
+      toast: function(message, duration) {
+        if (typeof duration === 'undefined') {
+          duration = 3000;
+        }
+        this.$.toast.innerHTML = message;
+        this.$.toast.show({duration: duration});
+      },
+      closeShade: function(name) {
+        this.$[name].active = false;
+      },
+      teamSelected: function(e) {
+        this.setTeam(e.currentTarget.team.id);
+      },
+      createTeam: function(id, name) {
+        this.domainRef
+          .child('teams')
+          .child(id).set({
+            id: id,
+            name: name,
+            createdAt: {'.sv': 'timestamp'}
+          }).then(function() {
+            app.setTeam(id);
+          });
+      },
+      updateStatus: function(emoji) {
+        if (this.activeTeam) {
+          var update = {};
+          update['updates/' + this.activeTeam.id + '/' + this.user.uid] = {
+            emoji: emoji,
+            updated: firebase.database.ServerValue.TIMESTAMP,
+            pic: this.user.photoURL,
+            name: this.user.displayName
+          };
+
+          update['history/' + this.activeTeam.id + '/' + this.user.uid + '/' + this._pushId()] = {
+            emoji: emoji,
+            updated: firebase.database.ServerValue.TIMESTAMP
+          };
+
+          this.domainRef.update(update);
+        }
+      },
+      teamById: function(id) {
+        for (var i = 0; i < this.teams.length; i++) {
+          if (id === this.teams[i].$key) {
+            return this.teams[i];
+          }
+        }
+        return null;
+      },
+      setTeam: function(id) {
+        if (this.user && this.teams) {
+          firebase.database().ref('/prefs').child(this.user.uid).update({activeTeam: id});
+          this.activeTeam = this.teamById(id);
+          this.activeTeamId = id;
+        } else {
+          this._pendingTeamId = id;
+        }
+      },
+      logout: function() {
+        firebase.auth().signOut();
+      }
+    });
+  </script>
+</dom-module>

@@ -1,38 +1,11 @@
 {
-  "domains": {
-    "$domain": {
-      ".read": "auth.email.endsWith('@' + $domain.replace(',', '.'))",
-      "updates": {
-        "$team": {
-          ".indexOn": ["updated"],
-          "$uid": {
-            ".write": "auth.uid === $uid && auth.email.endsWith('@' + $domain.replace(',', '.'))"
-          }
-        }
-      },
-      "teams": {
-        "$team": {
-          ".write": "auth.email.endsWith('@' + $domain.replace(',', '.'))",
-          "id": {
-            ".validate": "newData.val() === $team"
-          }
-        }
-      },
-      "history": {
-        "$team": {
-          "$uid": {
-            "$updateId": {
-              ".write": "auth.uid === $uid && auth.email.endsWith('@' + $domain.replace(',', '.'))"
-            }
-          }
-        }
+  "rules":{
+    "updates": {
+      "$uid": {
+        ".read": "auth.uid === $uid",
+        ".write": "auth.uid === $uid",
+        ".indexOn": "updated"
       }
-    }
-  },
-  "prefs": {
-    "$uid": {
-      ".read": "auth.uid === $uid",
-      ".write": "auth.uid === $uid"
     }
   }
 }

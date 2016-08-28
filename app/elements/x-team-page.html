@@ -70,7 +70,7 @@ limitations under the License.
       <app-header>
         <app-toolbar>
           <paper-icon-button drawer-toggle icon="menu" on-tap="openMenu"></paper-icon-button>
-          <div title>[[team.name]]</div>
+          <div title>Your Bets</div>
           <span hidden$="[[!offline]]" id="offline">Offline</span>
         </app-toolbar>
       </app-header>
@@ -91,9 +91,6 @@ limitations under the License.
           type: Boolean,
           value: false,
           reflectToAttribute: true
-        },
-        team: {
-          type: Object
         },
         updates: {
           type: Array,

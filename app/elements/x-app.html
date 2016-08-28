@@ -82,41 +82,17 @@ limitations under the License.
       storage-bucket="beerbet-7d100.appspot.com">
     </firebase-app>
 
-    <firebase-document id="prefs"
-      data="{{_fbPrefs}}"
-      path="/prefs/[[user.uid]]">
-    </firebase-document>
-    <app-indexeddb-mirror id="prefsMirror"
-      session="[[user.uid]]"
-      key="/prefs/[[user.uid]]"
-      data="[[_fbPrefs]]"
-      persisted-data="{{prefs}}"
-      online="[[online]]">
-    </app-indexeddb-mirror>
-
-    <firebase-query id="updates" log
+    <firebase-query id="updates"
       data="{{_fbTeamUpdates}}"
-      path="/domains/[[_domainId]]/updates/[[activeTeam.id]]"
+      path="/updates/[[user.uid]]"
       order-by-child="updated"
       start-at="[[yesterday]]">
     </firebase-query>
     <app-indexeddb-mirror id="updatesMirror"
       session="[[user.uid]]"
-      key="/domains/[[_domainId]]/updates/[[activeTeam.id]]"
-      data="[[_fbTeamUpdates]]"
+      key="/updates/[[user.uid]]"
+      data="{{_fbTeamUpdates}}"
       persisted-data="{{activeTeamUpdates}}"
-      online="[[online]]">
-    </app-indexeddb-mirror>
-
-    <firebase-query id="teams"
-      data="{{_fbTeams}}"
-      path="/domains/[[_domainId]]/teams">
-    </firebase-query>
-    <app-indexeddb-mirror id="teamsMirror"
-      session="[[user.uid]]"
-      key="/domains/[[_domainId]]/teams"
-      data="[[_fbTeams]]"
-      persisted-data="{{teams}}"
       online="[[online]]">
     </app-indexeddb-mirror>
 
@@ -124,29 +100,19 @@ limitations under the License.
       <app-drawer id="drawer" swipe-open>
         <div id="content">
           <app-toolbar>
-            <div title>Your Teams</div>
+            <div title>[[user.displayName]]</div>
           </app-toolbar>
 
           <section>
-            <paper-menu attr-for-selected="team-id" selected="{{activeTeamId}}">
-              <template is="dom-repeat" items="[[teams]]">
-                <paper-item on-tap="teamSelected" team-id$="[[item.id]]" team="[[item]]">[[item.name]]</paper-item>
-              </template>
-            </paper-menu>
-
-            <paper-button raised on-tap="openShade" shade="teamShade" hidden$="[[offline]]">Create Team</paper-button>
             <paper-button raised on-tap="logout">Sign Out</paper-button>
           </section>
         </div>
       </app-drawer>
-      <x-team-page team="[[activeTeam]]" updates="[[activeTeamUpdates]]" offline="[[offline]]"></x-team-page>
+      <x-team-page updates="[[activeTeamUpdates]]" offline="[[offline]]"></x-team-page>
     </app-drawer-layout>
 
-    <x-shade id="teamShade" active="[[openTeamShade]]">
-      <x-create-team id="firstTeam" domain="[[domain]]"></x-create-team>
-    </x-shade>
     <x-shade id="emojiShade" active="{{openEmojiShade}}">
-      <x-emoji-picker id="emoji" domain="[[domain]]" team="[[activeTeamId]]"></x-emoji-picker>
+      <x-emoji-picker id="emoji" domain="[[domain]]"></x-emoji-picker>
     </x-shade>
     <x-shade id="loginShade" active="[[!user]]">
       <x-login id="login" user="{{user}}" offline="[[offline]]"></x-login>
@@ -167,39 +133,12 @@ limitations under the License.
         },
         user: {
           type: Object,
-          observer: '_userChanged'
-        },
-        prefs: {
-          type: Object
-        },
-        teams: {
-          type: Array,
-          observer: '_teamsChanged'
-        },
-        activeTeam: {
-          type: Object
-        },
-        activeTeamUpdates: {
-          type: Array,
-          notify: true
-        },
-        domain: {
-          type: String,
-          readOnly: true,
-          observer: '_domainChanged'
         },
         openEmojiShade: {
           type: Boolean,
           value: false
-        },
-        openTeamShade: {
-          type: Boolean,
-          value: false
         }
       },
-      observers: [
-        'setTeam(prefs.activeTeam, teams.length)'
-      ],
       ready: function() {
         this.yesterday = Date.now() - ONE_DAY;
         this.offline = navigator.onLine === false;
@@ -209,26 +148,6 @@ limitations under the License.
         window.addEventListener('offline', function() {
           this.offline = true;
         }.bind(this));
-      },
-      _userChanged: function() {
-        if (this.user && this.user.emailVerified) {
-          this._setDomain(this.user.email.split('@')[1]);
-        }
-      },
-      _domainChanged: function() {
-        if (this.domain) {
-          this._domainId = this.domain.replace(/\./g,',');
-          this.domainRef = firebase.database().ref('/domains').child(this._domainId);
-        }
-      },
-      _teamsChanged: function() {
-        if (this.teams && this._pendingTeamId) {
-          this.setTeam(this._pendingTeamId);
-          this._pendingTeamId = null;
-        }
-      },
-      _pushId: function() {
-        return firebase.database().ref().push().key;
       },
       openShade: function(e) {
         var shade;
@@ -249,54 +168,15 @@ limitations under the License.
       closeShade: function(name) {
         this.$[name].active = false;
       },
-      teamSelected: function(e) {
-        this.setTeam(e.currentTarget.team.id);
-      },
-      createTeam: function(id, name) {
-        this.domainRef
-          .child('teams')
-          .child(id).set({
-            id: id,
-            name: name,
-            createdAt: {'.sv': 'timestamp'}
-          }).then(function() {
-            app.setTeam(id);
-          });
-      },
       updateStatus: function(emoji) {
-        if (this.activeTeam) {
-          var update = {};
-          update['updates/' + this.activeTeam.id + '/' + this.user.uid] = {
-            emoji: emoji,
-            updated: firebase.database.ServerValue.TIMESTAMP,
-            pic: this.user.photoURL,
-            name: this.user.displayName
-          };
+        var update = {
+          emoji: emoji,
+          updated: firebase.database.ServerValue.TIMESTAMP,
+          pic: this.user.photoURL,
+          name: this.user.displayName
+        };
 
-          update['history/' + this.activeTeam.id + '/' + this.user.uid + '/' + this._pushId()] = {
-            emoji: emoji,
-            updated: firebase.database.ServerValue.TIMESTAMP
-          };
-
-          this.domainRef.update(update);
-        }
-      },
-      teamById: function(id) {
-        for (var i = 0; i < this.teams.length; i++) {
-          if (id === this.teams[i].$key) {
-            return this.teams[i];
-          }
-        }
-        return null;
-      },
-      setTeam: function(id) {
-        if (this.user && this.teams) {
-          firebase.database().ref('/prefs').child(this.user.uid).update({activeTeam: id});
-          this.activeTeam = this.teamById(id);
-          this.activeTeamId = id;
-        } else {
-          this._pendingTeamId = id;
-        }
+        firebase.database().ref('/updates/' + this.user.uid).push(update);
       },
       logout: function() {
         firebase.auth().signOut();

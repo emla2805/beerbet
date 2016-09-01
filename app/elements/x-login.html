@@ -124,7 +124,7 @@ limitations under the License.
         }.bind(this));
       },
       login: function() {
-        firebase.auth().signInWithPopup(new firebase.auth.GoogleAuthProvider());
+        firebase.auth().signInWithRedirect(new firebase.auth.GoogleAuthProvider());
       }
     });
   </script>
